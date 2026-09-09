@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maze BFS Solver</title>
+
+<style>
+  :root {
+    --bg: #070b14;
+    --panel: #0d1422;
+    --panel-2: #111b2e;
+    --wall: #26344d;
+    --wall-border: #344866;
+    --floor: #0f1929;
+
+    --cyan: #22d3ee;
+    --green: #4ade80;
+    --orange: #fb923c;
+    --white: #f8fafc;
+    --muted: #7c8aa5;
+
+    --path: #fb923c;
+    --explored: #193b4c;
+
+    --font: "Segoe UI", Arial, sans-serif;
+    --mono: "Courier New", monospace;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    padding: 30px 15px;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    font-family: var(--font);
+    color: var(--white);
+
+    background:
+      radial-gradient(circle at top, #12213b 0%, transparent 45%),
+      linear-gradient(135deg, #050812, #0a1020 60%, #07101c);
+  }
+
+  .container {
+    width: min(100%, 850px);
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .tag {
+    display: inline-block;
+    padding: 6px 12px;
+    margin-bottom: 12px;
+
+    color: var(--cyan);
+    border: 1px solid rgba(34, 211, 238, 0.3);
+    background: rgba(34, 211, 238, 0.08);
+    border-radius: 20px;
+
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  h1 {
+    margin: 0;
+    font-size: clamp(26px, 5vw, 42px);
+    font-weight: 800;
+  }
+
+  .subtitle {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .main {
+    background: rgba(13, 20, 34, 0.9);
+    border: 1px solid #1e2d45;
+    border-radius: 18px;
+    padding: 22px;
+
+    box-shadow:
+      0 25px 80px rgba(0, 0, 0, 0.45),
+      inset 0 1px rgba(255,255,255,0.03);
+  }
+
+  .maze-wrapper {
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
+    padding: 8px;
+  }
+
+  #grid {
+    display: grid;
+
+    background: #050a13;
+    padding: 8px;
+
+    border: 2px solid #1c314b;
+    border-radius: 10px;
+
+    box-shadow:
+      0 0 25px rgba(34, 211, 238, 0.08),
+      inset 0 0 25px rgba(0, 0, 0, 0.5);
+
+    outline: none;
+  }
+
+  .cell {
+    width: 32px;
+    height: 32px;
+
+    background: var(--floor);
+
+    border: 1px solid rgba(255,255,255,0.025);
+
+    transition:
+      background 0.12s ease,
+      box-shadow 0.12s ease;
+  }
+
+  .cell.wall {
+    background: var(--wall);
+    border: 1px solid var(--wall-border);
+
+    box-shadow:
+      inset 0 0 8px rgba(0,0,0,0.25);
+  }
+
+  /* Start */
+  .cell.start {
+    position: relative;
+    background: #102a2c;
+  }
+
+  .cell.start::after {
+    content: "S";
+
+    position: absolute;
+    inset: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: var(--green);
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: bold;
+
+    text-shadow: 0 0 10px var(--green);
+  }
+
+  /* Goal */
+  .cell.goal {
+    position: relative;
+    background: #302014;
+  }
+
+  .cell.goal::after {
+    content: "G";
+
+    position: absolute;
+    inset: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    color: var(--orange);
+    font-family: var(--mono);
+    font-size: 16px;
+    font-weight: bold;
+
+    text-shadow: 0 0 10px var(--orange);
+  }
+
+  /* Player */
+  .cell.player {
+    position: relative;
+  }
+
+  .cell.player::before {
+    content: "";
+
+    position: absolute;
+    width: 13px;
+    height: 13px;
+
+    left: 50%;
+    top: 50%;
+
+    transform: translate(-50%, -50%);
+
+    border-radius: 50%;
+
+    background: var(--white);
+
+    box-shadow:
+      0 0 7px var(--white),
+      0 0 16px rgba(255,255,255,0.8);
+  }
+
+  /* Manually visited cells */
+  .cell.visited {
+    background: #16253a;
+  }
+
+  /* BFS explored */
+  .cell.explored {
+    background: var(--explored);
+
+    box-shadow:
+      inset 0 0 0 1px rgba(34,211,238,0.15);
+  }
+
+  /* Shortest path */
+  .cell.onpath {
+    background: rgba(251, 146, 60, 0.22);
+
+    box-shadow:
+      inset 0 0 0 1px rgba(251,146,60,0.3),
+      0 0 8px rgba(251,146,60,0.12);
+  }
+
+  .status {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+
+    margin-top: 22px;
+  }
+
+  .stat {
+    padding: 14px 10px;
+
+    text-align: center;
+
+    background: var(--panel-2);
+    border: 1px solid #1d2c44;
+    border-radius: 10px;
+  }
+
+  .stat-label {
+    color: var(--muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .stat-value {
+    margin-top: 5px;
+
+    color: var(--cyan);
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: bold;
+  }
+
+  .message {
+    min-height: 22px;
+
+    margin: 18px 0 4px;
+
+    text-align: center;
+
+    color: var(--orange);
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+
+  .legend {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+
+    margin-top: 18px;
+
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .swatch {
+    width: 12px;
+    height: 12px;
+
+    display: inline-block;
+
+    border-radius: 3px;
+  }
+
+  .controls {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+
+    margin-top: 22px;
+  }
+
+  button {
+    min-width: 130px;
+
+    padding: 10px 18px;
+
+    border: 1px solid #29415f;
+    border-radius: 8px;
+
+    background: #121f33;
+    color: var(--white);
+
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition:
+      transform 0.15s ease,
+      background 0.15s ease,
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+
+  button:hover {
+    transform: translateY(-1px);
+
+    background: #182940;
+    border-color: var(--cyan);
+
+    box-shadow: 0 0 15px rgba(34,211,238,0.12);
+  }
+
+  button:active {
+    transform: translateY(0);
+  }
+
+  button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  #solveBtn {
+    color: var(--cyan);
+    border-color: rgba(34,211,238,0.35);
+  }
+
+  #resetBtn {
+    color: var(--orange);
+    border-color: rgba(251,146,60,0.3);
+  }
+
+  .instructions {
+    margin-top: 18px;
+
+    text-align: center;
+
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  kbd {
+    padding: 3px 6px;
+
+    background: #182438;
+    border: 1px solid #2b3c55;
+    border-radius: 4px;
+
+    color: #cbd5e1;
+    font-family: var(--mono);
+  }
+
+  @media (max-width: 600px) {
+    .main {
+      padding: 12px;
+    }
+
+    .cell {
+      width: 23px;
+      height: 23px;
+    }
+
+    .status {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .controls {
+      flex-direction: column;
+    }
+
+    button {
+      width: 100%;
+    }
+
+    .maze-wrapper {
+      padding: 3px;
+    }
+  }
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <header class="header">
+    <div class="tag">AI Search Algorithm</div>
+
+    <h1>Maze BFS Solver</h1>
+
+    <div class="subtitle">
+      Breadth-First Search • Shortest Path Visualization
+    </div>
+  </header>
+
+  <main class="main">
+
+    <div class="maze-wrapper">
+      <div id="grid" tabindex="0" aria-label="Interactive maze"></div>
+    </div>
+
+    <div class="message" id="msg">&nbsp;</div>
+
+    <div class="status">
+
+      <div class="stat">
+        <div class="stat-label">Moves</div>
+        <div class="stat-value" id="moveCount">0</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Visited</div>
+        <div class="stat-value" id="visitCount">1</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Expanded</div>
+        <div class="stat-value" id="expandedCount">0</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-label">Path</div>
+        <div class="stat-value" id="pathLenCount">0</div>
+      </div>
+
+    </div>
+
+    <div class="legend">
+
+      <div class="legend-item">
+        <span class="swatch" style="background:#4ade80"></span>
+        Start
+      </div>
+
+      <div class="legend-item">
+        <span class="swatch" style="background:#fb923c"></span>
+        Goal
+      </div>
+
+      <div class="legend-item">
+        <span class="swatch" style="background:#f8fafc"></span>
+        Player
+      </div>
+
+      <div class="legend-item">
+        <span class="swatch" style="background:#26344d"></span>
+        Wall
+      </div>
+
+      <div class="legend-item">
+        <span class="swatch" style="background:#193b4c"></span>
+        BFS Explored
+      </div>
+
+      <div class="legend-item">
+        <span class="swatch" style="background:#fb923c"></span>
+        Shortest Path
+      </div>
+
+    </div>
+
+    <div class="controls">
+      <button id="solveBtn">▶ Solve BFS</button>
+      <button id="resetBtn">↻ Reset</button>
+    </div>
+
+    <div class="instructions">
+      Move with
+      <kbd>↑</kbd>
+      <kbd>↓</kbd>
+      <kbd>←</kbd>
+      <kbd>→</kbd>
+      or
+      <kbd>W</kbd>
+      <kbd>A</kbd>
+      <kbd>S</kbd>
+      <kbd>D</kbd>
+    </div>
+
+  </main>
+</div>
+
+
+<script>
+
+/* =========================================================
+   MAZE
+   1 = wall
+   0 = open path
+========================================================= */
+
+const maze = [
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+  [1,0,1,0,1,0,1,1,1,0,1,0,1,0,1],
+  [1,0,1,0,0,0,1,0,0,0,0,0,1,0,1],
+  [1,0,1,1,1,1,1,0,1,1,1,1,1,0,1],
+  [1,0,0,0,0,0,0,0,1,0,0,0,0,0,1],
+  [1,1,1,1,1,0,1,1,1,0,1,1,1,0,1],
+  [1,0,0,0,1,0,0,0,0,0,1,0,0,0,1],
+  [1,0,1,0,1,1,1,1,1,1,1,0,1,1,1],
+  [1,0,1,0,0,0,0,0,1,0,0,0,0,0,1],
+  [1,0,1,1,1,1,1,0,1,0,1,1,1,0,1],
+  [1,0,0,0,0,0,1,0,0,0,1,0,0,0,1],
+  [1,1,1,1,1,0,1,1,1,1,1,0,1,1,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+];
+
+
+/* =========================================================
+   START / GOAL
+========================================================= */
+
+const start = {
+  row: 1,
+  col: 1
+};
+
+const goal = {
+  row: 13,
+  col: 13
+};
+
+
+/* =========================================================
+   HELPER
+========================================================= */
+
+function key(row, col) {
+  return `${row},${col}`;
+}
+
+
+/* =========================================================
+   BFS ALGORITHM
+========================================================= */
+
+function bfs(maze, start, goal) {
+
+  const rows = maze.length;
+  const cols = maze[0].length;
+
+  const queue = [start];
+  let queueIndex = 0;
+
+  const seen = new Set([
+    key(start.row, start.col)
+  ]);
+
+  const cameFrom = new Map();
+
+  const visitedOrder = [start];
+
+  const directions = [
+    [-1, 0], // up
+    [1, 0],  // down
+    [0, -1], // left
+    [0, 1]   // right
+  ];
+
+
+  while (queueIndex < queue.length) {
+
+    const current = queue[queueIndex++];
+
+    /*
+      Goal reached.
+    */
+    if (
+      current.row === goal.row &&
+      current.col === goal.col
+    ) {
+
+      const path = [];
+
+      let node = current;
+
+      while (node) {
+
+        path.unshift(node);
+
+        const previous =
+          cameFrom.get(key(node.row, node.col));
+
+        node = previous || null;
+      }
+
+      return {
+        path,
+        visited: visitedOrder
+      };
+    }
+
+
+    /*
+      Check neighboring cells.
+    */
+    for (const [dr, dc] of directions) {
+
+      const nr = current.row + dr;
+      const nc = current.col + dc;
+
+      /*
+        IMPORTANT:
+        Check bounds BEFORE accessing maze[nr][nc].
+      */
+      if (
+        nr < 0 ||
+        nr >= rows ||
+        nc < 0 ||
+        nc >= cols
+      ) {
+        continue;
+      }
+
+      /*
+        Ignore walls.
+      */
+      if (maze[nr][nc] === 1) {
+        continue;
+      }
+
+      const neighborKey = key(nr, nc);
+
+      /*
+        Ignore cells already discovered.
+      */
+      if (seen.has(neighborKey)) {
+        continue;
+      }
+
+      seen.add(neighborKey);
+
+      const neighbor = {
+        row: nr,
+        col: nc
+      };
+
+      cameFrom.set(
+        neighborKey,
+        current
+      );
+
+      visitedOrder.push(neighbor);
+
+      queue.push(neighbor);
+    }
+  }
+
+
+  /*
+    No path found.
+  */
+  return {
+    path: [],
+    visited: visitedOrder
+  };
+}
+
+
+/* =========================================================
+   DOM ELEMENTS
+========================================================= */
+
+const gridEl =
+  document.getElementById("grid");
+
+const msgEl =
+  document.getElementById("msg");
+
+const moveCountEl =
+  document.getElementById("moveCount");
+
+const visitCountEl =
+  document.getElementById("visitCount");
+
+const expandedCountEl =
+  document.getElementById("expandedCount");
+
+const pathLenCountEl =
+  document.getElementById("pathLenCount");
+
+const solveBtn =
+  document.getElementById("solveBtn");
+
+const resetBtn =
+  document.getElementById("resetBtn");
+
+
+/* =========================================================
+   STATE
+========================================================= */
+
+const rows = maze.length;
+const cols = maze[0].length;
+
+gridEl.style.gridTemplateColumns =
+  `repeat(${cols}, 32px)`;
+
+
+let player = {
+  ...start
+};
+
+let moves = 0;
+
+let visited = new Set([
+  key(start.row, start.col)
+]);
+
+let explored = new Set();
+
+let onPath = new Set();
+
+let won = false;
+
+let solving = false;
+
+
+/*
+  Used to cancel old animations when reset is pressed.
+*/
+let animationId = 0;
+
+
+/* =========================================================
+   RENDER MAZE
+========================================================= */
+
+function render() {
+
+  gridEl.innerHTML = "";
+
+  for (let row = 0; row < rows; row++) {
+
+    for (let col = 0; col < cols; col++) {
+
+      const cell = document.createElement("div");
+
+      const cellKey = key(row, col);
+
+      cell.className = "cell";
+
+
+      if (maze[row][col] === 1) {
+        cell.classList.add("wall");
+      }
+
+
+      if (visited.has(cellKey)) {
+        cell.classList.add("visited");
+      }
+
+
+      if (explored.has(cellKey)) {
+        cell.classList.add("explored");
+      }
+
+
+      if (onPath.has(cellKey)) {
+        cell.classList.add("onpath");
+      }
+
+
+      if (
+        row === start.row &&
+        col === start.col
+      ) {
+        cell.classList.add("start");
+      }
+
+
+      if (
+        row === goal.row &&
+        col === goal.col
+      ) {
+        cell.classList.add("goal");
+      }
+
+
+      if (
+        row === player.row &&
+        col === player.col
+      ) {
+        cell.classList.add("player");
+      }
+
+
+      gridEl.appendChild(cell);
+    }
+  }
+
+
+  moveCountEl.textContent = moves;
+
+  visitCountEl.textContent =
+    visited.size;
+}
+
+
+/* =========================================================
+   PLAYER MOVEMENT
+========================================================= */
+
+function tryMove(dr, dc) {
+
+  if (won || solving) {
+    return;
+  }
+
+  const nr = player.row + dr;
+  const nc = player.col + dc;
+
+
+  /*
+    Prevent moving outside maze.
+  */
+  if (
+    nr < 0 ||
+    nr >= rows ||
+    nc < 0 ||
+    nc >= cols
+  ) {
+    return;
+  }
+
+
+  /*
+    Prevent walking through walls.
+  */
+  if (maze[nr][nc] === 1) {
+    return;
+  }
+
+
+  player = {
+    row: nr,
+    col: nc
+  };
+
+  moves++;
+
+  visited.add(
+    key(nr, nc)
+  );
+
+
+  /*
+    Goal reached manually.
+  */
+  if (
+    player.row === goal.row &&
+    player.col === goal.col
+  ) {
+
+    won = true;
+
+    msgEl.textContent =
+      `✓ Goal reached in ${moves} moves!`;
+  }
+
+
+  render();
+}
+
+
+/* =========================================================
+   KEYBOARD CONTROLS
+========================================================= */
+
+const keyMap = {
+
+  ArrowUp: [-1, 0],
+  ArrowDown: [1, 0],
+  ArrowLeft: [0, -1],
+  ArrowRight: [0, 1],
+
+  w: [-1, 0],
+  W: [-1, 0],
+
+  s: [1, 0],
+  S: [1, 0],
+
+  a: [0, -1],
+  A: [0, -1],
+
+  d: [0, 1],
+  D: [0, 1]
+};
+
+
+document.addEventListener(
+  "keydown",
+  function(event) {
+
+    const direction =
+      keyMap[event.key];
+
+    if (!direction) {
+      return;
+    }
+
+    event.preventDefault();
+
+    tryMove(
+      direction[0],
+      direction[1]
+    );
+  }
+);
+
+
+/* =========================================================
+   RESET
+========================================================= */
+
+function resetAll() {
+
+  /*
+    Cancel any previous animation.
+  */
+  animationId++;
+
+  player = {
+    ...start
+  };
+
+  moves = 0;
+
+  visited = new Set([
+    key(start.row, start.col)
+  ]);
+
+  explored = new Set();
+
+  onPath = new Set();
+
+  won = false;
+
+  solving = false;
+
+  msgEl.textContent = "";
+
+  expandedCountEl.textContent = "0";
+
+  pathLenCountEl.textContent = "0";
+
+  solveBtn.disabled = false;
+
+  render();
+}
+
+
+resetBtn.addEventListener(
+  "click",
+  function() {
+
+    resetAll();
+
+    gridEl.focus();
+  }
+);
+
+
+/* =========================================================
+   BFS SOLVER
+========================================================= */
+
+solveBtn.addEventListener(
+  "click",
+  function() {
+
+    if (solving) {
+      return;
+    }
+
+
+    resetAll();
+
+    solving = true;
+
+    solveBtn.disabled = true;
+
+    msgEl.textContent =
+      "Searching maze with BFS...";
+
+
+    /*
+      Calculate BFS result first.
+    */
+    const result =
+      bfs(maze, start, goal);
+
+    const path =
+      result.path;
+
+    const visitedOrder =
+      result.visited;
+
+
+    const currentAnimation =
+      animationId;
+
+
+    /*
+      Animate BFS exploration.
+    */
+    let i = 0;
+
+    function exploreStep() {
+
+      /*
+        Stop if Reset was clicked.
+      */
+      if (
+        currentAnimation !== animationId
+      ) {
+        return;
+      }
+
+
+      if (i < visitedOrder.length) {
+
+        const cell =
+          visitedOrder[i];
+
+        explored.add(
+          key(cell.row, cell.col)
+        );
+
+
+        /*
+          Show how many BFS nodes
+          have been expanded.
+        */
+        expandedCountEl.textContent =
+          i + 1;
+
+
+        render();
+
+        i++;
+
+        setTimeout(
+          exploreStep,
+          18
+        );
+
+        return;
+      }
+
+
+      /*
+        BFS finished.
+      */
+      if (path.length === 0) {
+
+        msgEl.textContent =
+          "✕ No path exists.";
+
+        solving = false;
+
+        solveBtn.disabled = false;
+
+        return;
+      }
+
+
+      /*
+        Animate shortest path.
+      */
+      animatePath(
+        path,
+        currentAnimation
+      );
+    }
+
+
+    exploreStep();
+  }
+);
+
+
+/* =========================================================
+   PATH ANIMATION
+========================================================= */
+
+function animatePath(
+  path,
+  currentAnimation
+) {
+
+  let index = 0;
+
+
+  function pathStep() {
+
+    /*
+      Stop old animation after reset.
+    */
+    if (
+      currentAnimation !== animationId
+    ) {
+      return;
+    }
+
+
+    if (index < path.length) {
+
+      const cell =
+        path[index];
+
+
+      const cellKey =
+        key(
+          cell.row,
+          cell.col
+        );
+
+
+      onPath.add(cellKey);
+
+
+      player = {
+        row: cell.row,
+        col: cell.col
+      };
+
+
+      /*
+        Path length in cells.
+      */
+      pathLenCountEl.textContent =
+        index + 1;
+
+
+      render();
+
+      index++;
+
+
+      setTimeout(
+        pathStep,
+        65
+      );
+
+      return;
+    }
+
+
+    /*
+      Animation completed.
+    */
+    const steps =
+      path.length - 1;
+
+    const expanded =
+      visitedOrderLengthSafe();
+
+
+    msgEl.textContent =
+      `✓ Shortest path found: ${steps} steps • ${expanded} nodes expanded`;
+
+
+    won = true;
+
+    solving = false;
+
+    solveBtn.disabled = false;
+  }
+
+
+  pathStep();
+}
+
+
+/*
+  Get expanded count safely.
+*/
+function visitedOrderLengthSafe() {
+
+  return Number(
+    expandedCountEl.textContent
+  ) || 0;
+}
+
+
+/* =========================================================
+   INITIAL RENDER
+========================================================= */
+
+render();
+
+gridEl.focus();
+
+</script>
+
+</body>
+</html>
